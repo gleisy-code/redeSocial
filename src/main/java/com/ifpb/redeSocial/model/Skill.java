@@ -8,8 +8,6 @@ import org.springframework.data.neo4j.core.schema.Node;
 @Node("Skill")
 public class Skill {
     @Id
-    @GeneratedValue
-    private Long id;
     private String nome;
 
     public Skill() {}
@@ -17,9 +15,6 @@ public class Skill {
     	this.nome = nome; 
     }
 
-    public Long getId() { 
-    	return id; 
-    }
     public String getNome() { 
     	return nome; 
     }

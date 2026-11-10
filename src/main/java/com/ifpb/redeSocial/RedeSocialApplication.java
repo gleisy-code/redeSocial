@@ -1,10 +1,10 @@
 package com.ifpb.redeSocial;
 
-import com.ifpb.redeSocial.model.Skill;
 import com.ifpb.redeSocial.model.Usuario;
 import com.ifpb.redeSocial.model.Vaga;
-import com.ifpb.redeSocial.repository.UsuarioRepository;
-import com.ifpb.redeSocial.repository.VagaRepository;
+import com.ifpb.redeSocial.service.DatabaseService;
+import com.ifpb.redeSocial.service.UsuarioService;
+import com.ifpb.redeSocial.service.VagaService;
 
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
@@ -22,10 +22,9 @@ public class RedeSocialApplication {
     }
 
     @Bean
-    CommandLineRunner iniciarMenu(UsuarioRepository usuarioRepo, VagaRepository vagaRepo) {
+    CommandLineRunner iniciarMenu(UsuarioService usuarioService, VagaService vagaService, DatabaseService seederService) {
         return args -> {
-            // 1. POVOA O BANCO COM DADOS INICIAIS (APENAS SE ESTIVER VAZIO)
-            popularBancoDeDados(usuarioRepo, vagaRepo);
+            seederService.popularBancoDeDados();
 
             Scanner scanner = new Scanner(System.in);
 
@@ -35,7 +34,6 @@ public class RedeSocialApplication {
 
             boolean sistemaRodando = true;
 
-            // LOOP PRINCIPAL DO SISTEMA
             while (sistemaRodando) {
                 System.out.println("\n--- TELA INICIAL ---");
                 System.out.println("1. Entrar em uma conta existente");
@@ -53,7 +51,6 @@ public class RedeSocialApplication {
                 String usuarioLogado = "";
 
                 if (opcaoInicial.equals("2")) {
-                    // CADASTRO DE NOVO USUÁRIO
                     System.out.print("\nDigite o nome do novo usuario: ");
                     String novoNome = scanner.nextLine().trim();
 
@@ -62,24 +59,20 @@ public class RedeSocialApplication {
                         continue;
                     }
 
-                    if (usuarioRepo.findByNome(novoNome) != null) {
+                    if (usuarioService.existeUsuario(novoNome)) {
                         System.out.println("[ERRO] Ja existe um usuario com o nome '" + novoNome + "'!");
                         continue;
                     }
 
-                    Usuario novoUsuario = new Usuario(novoNome);
-                    usuarioRepo.save(novoUsuario);
-
+                    usuarioService.criarUsuario(novoNome);
                     System.out.println("[SUCESSO] Usuario '" + novoNome + "' cadastrado no Neo4j!");
                     usuarioLogado = novoNome;
 
                 } else if (opcaoInicial.equals("1")) {
-                    // LOGIN EM CONTA EXISTENTE
                     System.out.print("Digite o nome do usuario (ex: Gleisy, Lucas, Mariana): ");
                     usuarioLogado = scanner.nextLine().trim();
 
-                    Usuario usuarioExistente = usuarioRepo.findByNome(usuarioLogado);
-                    if (usuarioExistente == null) {
+                    if (!usuarioService.existeUsuario(usuarioLogado)) {
                         System.out.println("[ERRO] Usuario '" + usuarioLogado + "' nao foi encontrado!");
                         continue;
                     }
@@ -88,7 +81,6 @@ public class RedeSocialApplication {
                     continue;
                 }
 
-                // LOOP DO MENU DO USUÁRIO LOGADO
                 boolean sessaoAtiva = true;
                 while (sessaoAtiva) {
                     System.out.println("\n-----------------------------------------");
@@ -102,12 +94,12 @@ public class RedeSocialApplication {
                     System.out.println("0. Sair do programa");
                     System.out.print("Escolha uma opcao: ");
 
-                    String opcao = scanner.nextLine();
+                    String opcao = scanner.nextLine().trim();
 
                     switch (opcao) {
                         case "1":
                             System.out.println("\n--- Pessoas que voce talvez conheca (2º Grau) ---");
-                            List<Usuario> sugestoes = usuarioRepo.buscarConexoesDeSegundoGrau(usuarioLogado);
+                            List<Usuario> sugestoes = usuarioService.buscarSugestoesConexao(usuarioLogado);
                             if (sugestoes.isEmpty()) {
                                 System.out.println("Nenhuma sugestao encontrada no momento.");
                             } else {
@@ -117,7 +109,7 @@ public class RedeSocialApplication {
 
                         case "2":
                             System.out.println("\n--- Vagas Recomendadas para Seu Perfil ---");
-                            List<Vaga> vagas = vagaRepo.recomendarVagasPorSkill(usuarioLogado);
+                            List<Vaga> vagas = vagaService.recomendarVagasPorSkill(usuarioLogado);
                             if (vagas.isEmpty()) {
                                 System.out.println("Nenhuma vaga compativel com suas habilidades no momento.");
                             } else {
@@ -134,15 +126,11 @@ public class RedeSocialApplication {
                                 break;
                             }
 
-                            Usuario usuarioOrigem = usuarioRepo.findByNome(usuarioLogado);
-                            Usuario usuarioDestino = usuarioRepo.findByNome(nomeParaConectar);
-
-                            if (usuarioDestino == null) {
+                            if (!usuarioService.existeUsuario(nomeParaConectar)) {
                                 System.out.println("[ERRO] Usuario '" + nomeParaConectar + "' nao foi encontrado!");
                             } else {
-                                usuarioOrigem.conectarCom(usuarioDestino);
-                                usuarioRepo.save(usuarioOrigem);
-                                System.out.println("[SUCESSO] Voce agora esta conectado com " + usuarioDestino.getNome() + "!");
+                                usuarioService.conectarUsuarios(usuarioLogado, nomeParaConectar);
+                                System.out.println("[SUCESSO] Voce agora esta conectado com " + nomeParaConectar + "!");
                             }
                             break;
 
@@ -155,13 +143,8 @@ public class RedeSocialApplication {
                                 break;
                             }
 
-                            Usuario uLogado = usuarioRepo.findByNome(usuarioLogado);
-                            Skill novaSkill = new Skill(nomeSkill);
-                            
-                            uLogado.adicionarSkill(novaSkill);
-                            usuarioRepo.save(uLogado);
-
-                            System.out.println("[SUCESSO] Skill '" + nomeSkill + "' adicionada ao perfil de " + usuarioLogado + "!");
+                            usuarioService.adicionarSkillAoUsuario(usuarioLogado, nomeSkill);
+                            System.out.println("[SUCESSO] Skill adicionada ao perfil de " + usuarioLogado + "!");
                             break;
 
                         case "5":
@@ -182,39 +165,5 @@ public class RedeSocialApplication {
                 }
             }
         };
-    }
-
-    private void popularBancoDeDados(UsuarioRepository usuarioRepo, VagaRepository vagaRepo) {
-        // Evita criar duplicados caso o banco ja contenha dados
-        if (usuarioRepo.count() > 0) {
-            return;
-        }
-
-        Skill java = new Skill("Java");
-        Skill neo4j = new Skill("Neo4j");
-        Skill react = new Skill("React");
-
-        Usuario gleisy = new Usuario("Gleisy");
-        Usuario lucas = new Usuario("Lucas");
-        Usuario mariana = new Usuario("Mariana");
-
-        gleisy.adicionarSkill(java);
-        gleisy.adicionarSkill(neo4j);
-
-        lucas.adicionarSkill(java);
-        mariana.adicionarSkill(react);
-
-        gleisy.conectarCom(lucas);
-        lucas.conectarCom(mariana);
-
-        usuarioRepo.save(gleisy);
-        usuarioRepo.save(lucas);
-        usuarioRepo.save(mariana);
-
-        Vaga vagaBackend = new Vaga("Dev Backend Java/Neo4j");
-        vagaBackend.adicionarSkill(java);
-        vagaBackend.adicionarSkill(neo4j);
-
-        vagaRepo.save(vagaBackend);
     }
 }
